@@ -1,0 +1,13 @@
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AllowAllParametersOfDeclarationOnNextLine: false
+BasedOnStyle: LLVM
+BinPackParameters: false
+BreakBeforeBraces: Allman
+ColumnLimit: 80
+IndentCaseLabels: true
+IndentWidth: 4
+NamespaceIndentation: All
+PointerAlignment: Right
+QualifierAlignment: Right
+UseTab: Never
