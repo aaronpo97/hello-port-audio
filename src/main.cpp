@@ -1,133 +1,125 @@
-#include <portaudio.h>
-#include <cmath>
+#include <array>
+#include <cstdlib>
 #include <iostream>
 #include <numbers>
+#include <portaudio.h>
 
-constexpr unsigned long num_seconds       = 5;
-constexpr unsigned long sample_rate       = 44100;
-constexpr unsigned long frames_per_buffer = 64;
-constexpr double        tau               = 2.0 * std::numbers::pi;
+constexpr long          num_seconds{5};
+constexpr float         sample_rate{44100};
+constexpr unsigned long frames_per_buffer{64};
+constexpr float         tau{2.0f * std::numbers::pi_v<float>};
 
-struct PaTestData
+struct WaveTableData
 {
-    double phase = 0.0;
+    float phase = 0.0;
+    float freq  = 220.0;
 };
-
-// PortAudio callback function to generate a stereo sine wave
-static int pa_test_callback(void const                     *,
-                            void                           *output_buffer,
-                            unsigned long                   frames_per_buffer,
-                            PaStreamCallbackTimeInfo const *,
-                            PaStreamCallbackFlags           ,
-                            void                           *user_data)
-{
-    // Cast output buffer to float pointer (for stereo float samples)
-    auto            *out            = static_cast<float *>(output_buffer);
-    // Cast user data to PaTestData
-    auto            *data           = static_cast<PaTestData *>(user_data);
-    constexpr double freq           = 100.0; 
-
-    // Phase step per sample
-    constexpr double phase_increment = tau * freq / sample_rate; 
-
-    // Generate samples for each frame in the buffer
-    for (uint64_t i = 0; i < frames_per_buffer; ++i)
-    {
-        float sample = static_cast<float>(std::sin(data->phase)); // Compute sine value at current phase
-        
-        // Write to left channel
-        *out++       = sample;
-        
-        // Write to right channel
-        *out++       = sample; 
-
-        data->phase += phase_increment; // Advance phase
-
-        if (data->phase >= tau)
-        {
-            data->phase = std::fmod(data->phase, tau); // Wrap phase to [theta, tau) 
-        }
-    }
-    return paContinue; // Continue playback
-}
-
-static void stream_finished(void *user_data)
-{
-    PaTestData *data = static_cast<PaTestData *>(user_data);
-    std::cout << "Stream Completed." << std::endl;
-}
 
 class PortAudioStream
 {
-    PaStream *pa_stream = nullptr;
+    PaStream *m_paStream = nullptr;
 
   public:
     PortAudioStream(PaStreamParameters const *output_parameters,
-           PaStreamCallback         *callback,
-           void                     *user_data)
-    {
-        PaError err =
-            Pa_OpenStream(&pa_stream, nullptr, output_parameters, sample_rate,
-                          frames_per_buffer, paClipOff, callback, user_data);
-        if (err != paNoError)
-        {
-            throw std::runtime_error(Pa_GetErrorText(err));
-        }
-    }
+                    PaStreamCallback         *callback,
+                    void                     *user_data);
 
-    void set_finished_callback(PaStreamFinishedCallback *cb, void *user_data)
-    {
-        PaError err = Pa_SetStreamFinishedCallback(pa_stream, cb);
-        if (err != paNoError)
-        {
-            throw std::runtime_error(Pa_GetErrorText(err));
-        }
-    }
+    void setFinishedCallback(PaStreamFinishedCallback *cb,
+                             void                     *user_data) const;
+    void start() const;
+    void stop() const;
 
-    void start()
-    {
-        PaError err = Pa_StartStream(pa_stream);
-        if (err != paNoError)
-        {
-            throw std::runtime_error(Pa_GetErrorText(err));
-        }
-    }
-
-    void stop()
-    {
-        if (pa_stream)
-        {
-            Pa_StopStream(pa_stream);
-        }
-    }
-
-    ~PortAudioStream()
-    {
-        if (pa_stream)
-        {
-            Pa_CloseStream(pa_stream);
-        }
-    }
+    ~PortAudioStream();
 };
 
-int main(void)
+PortAudioStream::PortAudioStream(PaStreamParameters const *output_parameters,
+                                 PaStreamCallback         *callback,
+                                 void                     *user_data)
 {
-    PaError      err;
-    PaTestData data;
+    PaError err =
+        Pa_OpenStream(&m_paStream, nullptr, output_parameters, sample_rate,
+                      frames_per_buffer, paClipOff, callback, user_data);
 
-    std::cout << "PortAudio Test: output sine wave. SR = " << sample_rate
-              << ", BufSize = " << frames_per_buffer << std::endl;
+    if (err != paNoError)
+    {
+        throw std::runtime_error(Pa_GetErrorText(err));
+    }
+}
+void PortAudioStream::setFinishedCallback(PaStreamFinishedCallback *cb,
+                                          void * /*user_data*/) const
+{
+    PaError err = Pa_SetStreamFinishedCallback(m_paStream, cb);
+    if (err != paNoError)
+    {
+        throw std::runtime_error(Pa_GetErrorText(err));
+    }
+}
 
-    PaStreamParameters output_parameters{.device       = 0, // Will be set below
-                                         .channelCount = 2, // Stereo output
-                                         .sampleFormat = paFloat32,
+void PortAudioStream::start() const
+{
+    PaError err = Pa_StartStream(m_paStream);
+    if (err != paNoError)
+    {
+        throw std::runtime_error(Pa_GetErrorText(err));
+    }
+}
+
+void PortAudioStream::stop() const
+{
+    if (m_paStream)
+    {
+        Pa_StopStream(m_paStream);
+    }
+}
+
+PortAudioStream::~PortAudioStream()
+{
+    if (m_paStream)
+    {
+        Pa_CloseStream(m_paStream);
+    }
+}
+
+int main()
+{
+    WaveTableData wave_table_data;
+
+    PaStreamCallback *cb =
+        +[](void const * /*_inputBuffer*/, void *output_buffer,
+            unsigned long const frames_per_buffer,
+            PaStreamCallbackTimeInfo const * /*_time_info*/,
+            PaStreamCallbackFlags /*_status_flags*/, void *test_data) -> int
+    {
+        auto *out  = static_cast<float *>(output_buffer);
+        auto *data = static_cast<WaveTableData *>(test_data);
+
+        // Calculate how much to advance phase each sample (normalized 0–1)
+        float const phaseInc = data->freq / sample_rate;
+
+        for (unsigned long i = 0; i < frames_per_buffer; ++i)
+        {
+            auto const sample = std::sinf(tau * data->phase);
+
+            // Write same sample to both channels (stereo)
+            *out++ = sample;
+            *out++ = sample;
+
+            // Advance phase
+            data->phase += phaseInc;
+            if (data->phase >= 1.0)
+                data->phase -= 1.0;
+        }
+
+        return paContinue;
+    };
+
+    PaStreamParameters output_parameters{.channelCount              = 2,
+                                         .sampleFormat              = paFloat32,
                                          .suggestedLatency          = 0.0,
                                          .hostApiSpecificStreamInfo = nullptr};
-
     try
     {
-        err = Pa_Initialize();
-        if (err != paNoError)
+        if (PaError const err = Pa_Initialize(); err != paNoError)
         {
             throw std::runtime_error(Pa_GetErrorText(err));
         }
@@ -138,22 +130,27 @@ int main(void)
             throw std::runtime_error("No default output device.");
         }
 
-        PortAudioStream s(&output_parameters, pa_test_callback, &data);
-        s.set_finished_callback(&stream_finished, &data);
+        // Create a PortAudio stream for audio output
+        PortAudioStream const s(&output_parameters, cb, &wave_table_data);
+
+        s.setFinishedCallback(
+            +[](void *) -> void { std::cout << "Stream Completed.\n"; },
+            &wave_table_data);
+
         s.start();
 
-        std::cout << "Play for " << num_seconds << " seconds." << std::endl;
+        std::cout << "Playing for " << num_seconds << " seconds." << std::endl;
         Pa_Sleep(num_seconds * 1000);
 
         s.stop();
         Pa_Terminate();
-        std::cout << "Test finished." << std::endl;
-        return 0;
     }
-    catch (std::exception const &ex)
+    catch (std::exception const &e)
     {
-        std::cerr << "Exception: " << ex.what() << std::endl;
-        Pa_Terminate();
-        return 1;
+        std::cout << e.what() << std::endl;
+        return EXIT_FAILURE;
     }
+
+    std::cout << "Test finished." << std::endl;
+    return EXIT_SUCCESS;
 }
