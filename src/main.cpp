@@ -1,89 +1,27 @@
+#include "../include/MidiNotes.hpp"
+#include "../include/constants.hpp"
+#include "../include/PortAudioStream.hpp"
+
 #include <array>
 #include <cstdlib>
 #include <iostream>
-#include <numbers>
 #include <portaudio.h>
 
-constexpr long          num_seconds{5};
-constexpr float         sample_rate{44100};
-constexpr unsigned long frames_per_buffer{64};
-constexpr float         tau{2.0f * std::numbers::pi_v<float>};
-
+constexpr long num_seconds{5};
 struct WaveTableData
 {
     float phase = 0.0;
-    float freq  = 220.0;
+    float freq = midi_to_frequency(MidiNotes::DX3);
 };
-
-class PortAudioStream
-{
-    PaStream *m_paStream = nullptr;
-
-  public:
-    PortAudioStream(PaStreamParameters const *output_parameters,
-                    PaStreamCallback         *callback,
-                    void                     *user_data);
-
-    void setFinishedCallback(PaStreamFinishedCallback *cb,
-                             void                     *user_data) const;
-    void start() const;
-    void stop() const;
-
-    ~PortAudioStream();
-};
-
-PortAudioStream::PortAudioStream(PaStreamParameters const *output_parameters,
-                                 PaStreamCallback         *callback,
-                                 void                     *user_data)
-{
-    PaError err =
-        Pa_OpenStream(&m_paStream, nullptr, output_parameters, sample_rate,
-                      frames_per_buffer, paClipOff, callback, user_data);
-
-    if (err != paNoError)
-    {
-        throw std::runtime_error(Pa_GetErrorText(err));
-    }
-}
-void PortAudioStream::setFinishedCallback(PaStreamFinishedCallback *cb,
-                                          void * /*user_data*/) const
-{
-    PaError err = Pa_SetStreamFinishedCallback(m_paStream, cb);
-    if (err != paNoError)
-    {
-        throw std::runtime_error(Pa_GetErrorText(err));
-    }
-}
-
-void PortAudioStream::start() const
-{
-    PaError err = Pa_StartStream(m_paStream);
-    if (err != paNoError)
-    {
-        throw std::runtime_error(Pa_GetErrorText(err));
-    }
-}
-
-void PortAudioStream::stop() const
-{
-    if (m_paStream)
-    {
-        Pa_StopStream(m_paStream);
-    }
-}
-
-PortAudioStream::~PortAudioStream()
-{
-    if (m_paStream)
-    {
-        Pa_CloseStream(m_paStream);
-    }
-}
 
 int main()
 {
     WaveTableData wave_table_data;
 
+    // Note: The audio callback runs in a special context (often a real-time
+    // thread or interrupt). Avoid calling functions that may block, allocate
+    // memory, or take unpredictable time, as this can cause audio glitches or
+    // dropouts. Keep the callback fast and deterministic.
     PaStreamCallback *cb =
         +[](void const * /*_inputBuffer*/, void *output_buffer,
             unsigned long const frames_per_buffer,
@@ -98,6 +36,8 @@ int main()
 
         for (unsigned long i = 0; i < frames_per_buffer; ++i)
         {
+            // @note calling std::sinf here is bad practice
+            // @todo use a precomputed table of values or different algorithm
             auto const sample = std::sinf(tau * data->phase);
 
             // Write same sample to both channels (stereo)
