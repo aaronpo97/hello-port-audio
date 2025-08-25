@@ -16,8 +16,7 @@ PortAudioStream::PortAudioStream(PaStreamParameters const *output_parameters,
         throw std::runtime_error(Pa_GetErrorText(err));
     }
 }
-void PortAudioStream::setFinishedCallback(PaStreamFinishedCallback *cb,
-                                          void * /*user_data*/) const
+void PortAudioStream::setFinishedCallback(PaStreamFinishedCallback *cb) const
 {
     PaError err = Pa_SetStreamFinishedCallback(m_paStream, cb);
     if (err != paNoError)

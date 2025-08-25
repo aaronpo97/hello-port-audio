@@ -10,8 +10,7 @@ public:
                     PaStreamCallback         *callback,
                     void                     *user_data);
 
-    void setFinishedCallback(PaStreamFinishedCallback *cb,
-                             void                     *user_data) const;
+    void setFinishedCallback(PaStreamFinishedCallback *cb) const;
     void start() const;
     void stop() const;
 
