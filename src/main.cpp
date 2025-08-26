@@ -12,8 +12,8 @@ constexpr long num_seconds{5};
 
 int main()
 {
-    // Start on A4
-    StreamState stream_state{midi_to_frequency(MidiNotes::A4)};
+    StreamState stream_state(midi_to_frequency(MidiNotes::A4),
+                             {100, 200, 0.7f, 500});
 
     /**
      * \note This callback runs on the real-time audio thread and therefore must
@@ -27,7 +27,7 @@ int main()
     PaStreamCallback *stream_cb =
         +[](void const                     *inputBuffer,     //
             void                           *outputBuffer,    //
-            unsigned long                   framesPerBuffer, //
+            unsigned long const             framesPerBuffer, //
             PaStreamCallbackTimeInfo const *timeInfo,        //
             PaStreamCallbackFlags           statusFlags,     //
             void                           *userData) -> int
@@ -44,9 +44,14 @@ int main()
                 c_tableMask &
                 static_cast<size_t>(data->getPhase() * c_tableSize);
 
-            float const sample = data->getWaveTable()[idx];
-            *out++             = sample; // L
-            *out++             = sample; // R
+            float const oscillator = data->getWaveTable()[idx];
+
+            // Apply envelope to the oscillator output
+            float const envelope = data->getEnvelope().processSample();
+            float const sample   = oscillator * envelope;
+
+            *out++ = sample; // L
+            *out++ = sample; // R
 
             float ph = data->getPhase() + phaseInc;
             if (ph >= 1.0f)
@@ -68,7 +73,6 @@ int main()
 
     try
     {
-
         if (PaError const err = Pa_Initialize(); err != paNoError)
             throw std::runtime_error(Pa_GetErrorText(err));
 
@@ -83,23 +87,35 @@ int main()
         audio_stream.setFinishedCallback(finished_cb);
         audio_stream.start();
 
-        // Play whole tone scale A2..A6 ascending and descending
-
+        // Play diminished seventh arpeggio ascending and descending with
+        // envelope
         {
-            constexpr int64_t sleep_time = 100;
-            using U                      = std::underlying_type_t<MidiNotes>;
-            for (auto n = MidiNotes::A2; n < MidiNotes::A6;
-                 n      = static_cast<MidiNotes>(static_cast<U>(n) + 2))
+            constexpr int64_t note_duration = 100; // ms per note
+            constexpr int64_t note_gap      = 50;  // ms between notes
+
+            using U = std::underlying_type_t<MidiNotes>;
+
+            Envelope &env = stream_state.getEnvelope();
+            // Ascending
+            for (auto n = MidiNotes::A2; n < MidiNotes::A7;
+                 n      = static_cast<MidiNotes>(static_cast<U>(n) + 3))
             {
                 stream_state.setFrequency(midi_to_frequency(n));
-                Pa_Sleep(sleep_time);
+                env.noteOn(); // Trigger envelope
+                Pa_Sleep(note_duration);
+                env.noteOff();      // Release envelope
+                Pa_Sleep(note_gap); // Wait for release to complete
             }
 
-            for (auto n = MidiNotes::A6; n >= MidiNotes::A2;
-                 n      = static_cast<MidiNotes>(static_cast<U>(n) - 2))
+            // Descending
+            for (auto n = MidiNotes::A7; n >= MidiNotes::A2;
+                 n      = static_cast<MidiNotes>(static_cast<U>(n) - 3))
             {
                 stream_state.setFrequency(midi_to_frequency(n));
-                Pa_Sleep(sleep_time);
+                env.noteOn();
+                Pa_Sleep(note_duration);
+                env.noteOff();
+                Pa_Sleep(note_gap);
             }
         }
 

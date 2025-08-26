@@ -4,6 +4,10 @@
 
 #include <cmath>
 
+/**
+ * \enum MidiNotes
+ * MIDI note numbers, grouped by octave.
+ */
 enum class MidiNotes : uint8_t
 {
     // Octave 0

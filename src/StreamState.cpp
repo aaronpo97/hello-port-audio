@@ -1,8 +1,9 @@
 #include "../include/StreamState.hpp"
+#include "../include/Envelope.hpp"
 #include "../include/constants.hpp"
 #include <cmath>
 
-StreamState::StreamState(float const initFreq)
+StreamState::StreamState(float const initFreq, Envelope const &env)
     : m_freq(initFreq),
       m_waveTable(
           []
@@ -14,9 +15,12 @@ StreamState::StreamState(float const initFreq)
                   t[i]              = std::sinf(phase * constants::math::tau);
               }
               return t;
-          }())
+          }()),
+      m_envelope(env)
 {
 }
+
+Envelope &StreamState::getEnvelope() { return m_envelope; }
 
 float StreamState::getPhase() const
 {
