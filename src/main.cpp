@@ -24,20 +24,21 @@ int main()
      * thread must be communicated safely using std::atomic (or another
      * lock-free mechanism) to prevent data races.
      */
-    PaStreamCallback *cb =
-        +[](void const * /*_inputBuffer*/, void *output_buffer,
-            unsigned long const frames_per_buffer,
-            PaStreamCallbackTimeInfo const * /*_time_info*/,
-            PaStreamCallbackFlags /*_status_flags*/, void *test_data) -> int
+    PaStreamCallback *stream_cb =
+        +[](void const                     *inputBuffer,     //
+            void                           *outputBuffer,    //
+            unsigned long                   framesPerBuffer, //
+            PaStreamCallbackTimeInfo const *timeInfo,        //
+            PaStreamCallbackFlags           statusFlags,     //
+            void                           *userData) -> int
     {
-        auto *out  = static_cast<float *>(output_buffer);
-        auto *data = static_cast<StreamState *>(test_data);
+        auto *out  = static_cast<float *>(outputBuffer);
+        auto *data = static_cast<StreamState *>(userData);
 
-        // Per-buffer control fetch
         float const freq     = data->getCurrentFrequency();
         float const phaseInc = freq / constants::audio::sample_rate;
 
-        for (unsigned long i = 0; i < frames_per_buffer; ++i)
+        for (unsigned long i = 0; i < framesPerBuffer; ++i)
         {
             size_t const idx =
                 c_tableMask &
@@ -56,6 +57,9 @@ int main()
         return paContinue;
     };
 
+    PaStreamFinishedCallback *finished_cb =
+        +[](void *userData) { std::cout << "Stream completed." << std::endl; };
+
     PaStreamParameters output_parameters{.device = paNoDevice, // will set below
                                          .channelCount              = 2,
                                          .sampleFormat              = paFloat32,
@@ -73,11 +77,10 @@ int main()
             throw std::runtime_error("No default output device.");
 
         // Create and run stream
-        PortAudioStream const audio_stream({}, output_parameters, cb,
-                                           &stream_state);
+        PortAudioStream audio_stream({}, output_parameters, stream_cb,
+                                     &stream_state);
 
-        audio_stream.setFinishedCallback(
-            +[](void *) { std::cout << "Stream Completed.\n"; });
+        audio_stream.setFinishedCallback(finished_cb);
         audio_stream.start();
 
         // Play whole tone scale A2..A6 ascending and descending
