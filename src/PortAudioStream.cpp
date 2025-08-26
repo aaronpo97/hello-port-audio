@@ -7,7 +7,7 @@ PortAudioStream::PortAudioStream(PaStreamParameters const &input_parameters,
                                  PaStreamCallback         *callback,
                                  void                     *user_data)
 {
-    PaError err = Pa_OpenStream(
+    PaError const err = Pa_OpenStream(
         &m_paStream, nullptr, &output_parameters, constants::audio::sample_rate,
         constants::audio::frames_per_buffer, paClipOff, callback, user_data);
 
@@ -16,7 +16,7 @@ PortAudioStream::PortAudioStream(PaStreamParameters const &input_parameters,
         throw std::runtime_error(Pa_GetErrorText(err));
     }
 }
-void PortAudioStream::setFinishedCallback(PaStreamFinishedCallback *cb) const
+void PortAudioStream::setFinishedCallback(PaStreamFinishedCallback *cb)
 {
     PaError err = Pa_SetStreamFinishedCallback(m_paStream, cb);
     if (err != paNoError)
@@ -25,7 +25,7 @@ void PortAudioStream::setFinishedCallback(PaStreamFinishedCallback *cb) const
     }
 }
 
-void PortAudioStream::start() const
+void PortAudioStream::start()
 {
     PaError err = Pa_StartStream(m_paStream);
     if (err != paNoError)
@@ -34,7 +34,7 @@ void PortAudioStream::start() const
     }
 }
 
-void PortAudioStream::stop() const
+void PortAudioStream::stop()
 {
     if (m_paStream)
     {
@@ -42,10 +42,14 @@ void PortAudioStream::stop() const
     }
 }
 
-PortAudioStream::~PortAudioStream()
+void PortAudioStream::cleanupStream()
 {
-    if (m_paStream)
+    if (m_paStream == nullptr)
     {
-        Pa_CloseStream(m_paStream);
+        return;
     }
+
+    Pa_CloseStream(m_paStream);
 }
+
+PortAudioStream::~PortAudioStream() { cleanupStream(); }

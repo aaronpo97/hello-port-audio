@@ -84,7 +84,7 @@ int main()
 
         {
             constexpr int64_t sleep_time = 100;
-            using U = std::underlying_type_t<MidiNotes>;
+            using U                      = std::underlying_type_t<MidiNotes>;
             for (auto n = MidiNotes::A2; n < MidiNotes::A6;
                  n      = static_cast<MidiNotes>(static_cast<U>(n) + 2))
             {
@@ -99,7 +99,7 @@ int main()
                 Pa_Sleep(sleep_time);
             }
         }
-        
+
         audio_stream.stop();
         Pa_Terminate();
     }
