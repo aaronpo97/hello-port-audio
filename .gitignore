@@ -1,10 +1,5 @@
 build
 .DS_Store
-.idea/codeStyles/codeStyleConfig.xml
-.idea/codeStyles/Project.xml
-.idea/editor.xml
-.idea/hello-port-audio.iml
-.idea/material_theme_project_new.xml
-.idea/misc.xml
-.idea/modules.xml
-.idea/vcs.xml
+.idea
+.vscode
+/cmake-build-debug
