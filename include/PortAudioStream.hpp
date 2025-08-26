@@ -5,8 +5,9 @@ class PortAudioStream
 {
     PaStream *m_paStream = nullptr;
 
-public:
-    PortAudioStream(PaStreamParameters const *output_parameters,
+  public:
+    PortAudioStream(PaStreamParameters const &input_parameters,
+                    PaStreamParameters const &output_parameters,
                     PaStreamCallback         *callback,
                     void                     *user_data);
 

@@ -2,14 +2,14 @@
 #include "../include/constants.hpp"
 #include <stdexcept>
 
-
-PortAudioStream::PortAudioStream(PaStreamParameters const *output_parameters,
+PortAudioStream::PortAudioStream(PaStreamParameters const &input_parameters,
+                                 PaStreamParameters const &output_parameters,
                                  PaStreamCallback         *callback,
                                  void                     *user_data)
 {
-    PaError err =
-        Pa_OpenStream(&m_paStream, nullptr, output_parameters, sample_rate,
-                      frames_per_buffer, paClipOff, callback, user_data);
+    PaError err = Pa_OpenStream(
+        &m_paStream, nullptr, &output_parameters, constants::audio::sample_rate,
+        constants::audio::frames_per_buffer, paClipOff, callback, user_data);
 
     if (err != paNoError)
     {

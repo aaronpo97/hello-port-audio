@@ -1,10 +1,10 @@
 #pragma once
-#include <cstdint>
 #include "../include/constants.hpp"
+#include <cstdint>
 
 #include <cmath>
 
-enum class MidiNotes : uint32_t
+enum class MidiNotes : uint8_t
 {
     // Octave 0
     C0 = 12,
@@ -122,9 +122,9 @@ enum class MidiNotes : uint32_t
     C8
 };
 
-
 constexpr float midi_to_frequency(MidiNotes midi_no)
 {
     float const exponent = (static_cast<float>(midi_no) - 69.0f) / 12.0f;
-    return std::powf(2, exponent) * static_cast<float>(standard_A4_hz);
+    return std::powf(2, exponent) *
+           static_cast<float>(constants::audio::standard_A4_hz);
 }
