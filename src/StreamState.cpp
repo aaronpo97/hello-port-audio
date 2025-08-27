@@ -1,6 +1,8 @@
 #include "../include/StreamState.hpp"
 #include "../include/Envelope.hpp"
 #include "../include/constants.hpp"
+
+#include <algorithm>
 #include <cmath>
 
 StreamState::StreamState(float const initFreq, Envelope const &env)
@@ -9,11 +11,13 @@ StreamState::StreamState(float const initFreq, Envelope const &env)
           []
           {
               std::array<float, c_tableSize> t{};
-              for (std::size_t i = 0; i < c_tableSize; ++i)
+
+              for (size_t i = 0; i < c_tableSize; ++i)
               {
                   float const phase = static_cast<float>(i) / c_tableSize;
                   t[i]              = std::sinf(phase * constants::math::tau);
               }
+
               return t;
           }()),
       m_envelope(env)

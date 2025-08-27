@@ -1,12 +1,30 @@
 #include "../include/Envelope.hpp"
 #include <algorithm>
 
-void Envelope::setAttackMs(uint64_t ms)
+Envelope::Envelope(uint64_t const attackMs,
+                   uint64_t const decayMs,
+                   float const    sustain,
+                   uint64_t const releaseMs)
+    : m_attackTimeMs(attackMs), m_decayTimeMs(decayMs), m_sustainLevel(sustain),
+      m_releaseTimeMs(releaseMs)
+{
+}
+Envelope::Envelope(Envelope const &other)
+    : m_attackTimeMs(other.m_attackTimeMs.load(std::memory_order_relaxed)),
+      m_decayTimeMs(other.m_decayTimeMs.load(std::memory_order_relaxed)),
+      m_sustainLevel(other.m_sustainLevel.load(std::memory_order_relaxed)),
+      m_releaseTimeMs(other.m_releaseTimeMs.load(std::memory_order_relaxed)),
+      m_stage(other.m_stage.load(std::memory_order_relaxed)),
+      m_stageTime(other.m_stageTime.load(std::memory_order_relaxed)),
+      m_amplitude(other.m_amplitude.load(std::memory_order_relaxed))
+{
+}
+void Envelope::setAttackMs(uint64_t const ms)
 {
     m_attackTimeMs.store(ms, std::memory_order_relaxed);
 }
 
-void Envelope::setDecayMs(uint64_t ms)
+void Envelope::setDecayMs(uint64_t const ms)
 {
     m_decayTimeMs.store(ms, std::memory_order_relaxed);
 }
@@ -17,7 +35,7 @@ void Envelope::setSustain(float const level)
                          std::memory_order_relaxed);
 }
 
-void Envelope::setReleaseMs(uint64_t ms)
+void Envelope::setReleaseMs(uint64_t const ms)
 {
     m_releaseTimeMs.store(ms, std::memory_order_relaxed);
 }
@@ -37,13 +55,13 @@ void Envelope::noteOff()
     }
 }
 
-float Envelope::processSample()
+float Envelope::processEnvelope()
 {
     constexpr float sampleTime = 1.0f / constants::audio::sample_rate;
 
     EnvelopeStage const stage     = m_stage.load(std::memory_order_relaxed);
     float const         stageTime = m_stageTime.load(std::memory_order_relaxed);
-    float currentLevel = m_currentLevel.load(std::memory_order_relaxed);
+    float currentAmplitude;
 
     switch (stage)
     {
@@ -52,16 +70,22 @@ float Envelope::processSample()
             float const attackTimeSec = static_cast<float>(m_attackTimeMs.load(
                                             std::memory_order_relaxed)) /
                                         1000.0f;
-            currentLevel = stageTime / std::max(attackTimeSec, 0.001f);
 
-            if (currentLevel >= 1.0f)
+            // Linear ramp: 0% to 100% over attack time
+            currentAmplitude = stageTime / std::max(attackTimeSec, 0.001f);
+
+            // Example: if stageTime = 0.025s and ATTACK_TIME = 0.05s
+            // currentLevel = 0.025 / 0.05 = 0.5 (50% amplitude)
+            if (currentAmplitude >= 1.0f)
             {
-                currentLevel = 1.0f;
+                // Attack is complete, move to decay
+                // currentLevel = 1.0f; -- reset down to 1.0
                 m_stage.store(EnvelopeStage::Decay, std::memory_order_relaxed);
                 m_stageTime.store(0.0f, std::memory_order_relaxed);
             }
             else
             {
+                // Continue attack, increment time
                 m_stageTime.store(stageTime + sampleTime,
                                   std::memory_order_relaxed);
             }
@@ -75,15 +99,18 @@ float Envelope::processSample()
                                        1000.0f;
             float const sustainLevel =
                 m_sustainLevel.load(std::memory_order_relaxed);
+
+            // Calculate how much to decay from peak to get to sustain level
             float const decayAmount =
                 (1.0f - sustainLevel) *
                 (stageTime / std::max(decayTimeSec, 0.001f));
 
-            currentLevel = 1.0f - decayAmount;
+            currentAmplitude = 1.0f - decayAmount;
 
-            if (currentLevel <= sustainLevel || stageTime >= decayTimeSec)
+            if (currentAmplitude <= sustainLevel || stageTime >= decayTimeSec)
             {
-                currentLevel = sustainLevel;
+                // Delay complete, move to sustain
+                currentAmplitude = sustainLevel;
                 m_stage.store(EnvelopeStage::Sustain,
                               std::memory_order_relaxed);
                 m_stageTime.store(0.0f, std::memory_order_relaxed);
@@ -98,7 +125,7 @@ float Envelope::processSample()
 
         case EnvelopeStage::Sustain:
         {
-            currentLevel = m_sustainLevel.load(std::memory_order_relaxed);
+            currentAmplitude = m_sustainLevel.load(std::memory_order_relaxed);
             // Stay in sustain until noteOff() is called
             break;
         }
@@ -109,16 +136,17 @@ float Envelope::processSample()
                 static_cast<float>(
                     m_releaseTimeMs.load(std::memory_order_relaxed)) /
                 1000.0f;
-            float const releaseStart =
-                m_currentLevel.load(std::memory_order_relaxed);
+
+            // How much amplitude should be reduced
             float const releaseAmount =
-                releaseStart * (stageTime / std::max(releaseTimeSec, 0.001f));
+                currentAmplitude * (stageTime / std::max(releaseTimeSec, 0.001f));
 
-            currentLevel = releaseStart - releaseAmount;
-
-            if (currentLevel <= 0.0f || stageTime >= releaseTimeSec)
+            currentAmplitude = currentAmplitude - releaseAmount;
+    
+            // If amplitude reaches 0 or release time is up, go to idle
+            if (currentAmplitude <= 0.0f || stageTime >= releaseTimeSec)
             {
-                currentLevel = 0.0f;
+                currentAmplitude = 0.0f;
                 m_stage.store(EnvelopeStage::Idle, std::memory_order_relaxed);
                 m_stageTime.store(0.0f, std::memory_order_relaxed);
             }
@@ -132,17 +160,17 @@ float Envelope::processSample()
 
         case EnvelopeStage::Idle:
         default:
-            currentLevel = 0.0f;
+            currentAmplitude = 0.0f;
             break;
     }
 
-    m_currentLevel.store(currentLevel, std::memory_order_relaxed);
-    return currentLevel;
+    m_amplitude.store(currentAmplitude, std::memory_order_relaxed);
+    return currentAmplitude;
 }
 
 float Envelope::getCurrentLevel() const
 {
-    return m_currentLevel.load(std::memory_order_relaxed);
+    return m_amplitude.load(std::memory_order_relaxed);
 }
 
 EnvelopeStage Envelope::getCurrentStage() const

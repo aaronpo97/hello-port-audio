@@ -5,10 +5,10 @@
 #include <cmath>
 
 /**
- * \enum MidiNotes
+ * \enum MidiNote
  * MIDI note numbers, grouped by octave.
  */
-enum class MidiNotes : uint8_t
+enum class MidiNote : uint8_t
 {
     // Octave 0
     C0 = 12,
@@ -126,7 +126,7 @@ enum class MidiNotes : uint8_t
     C8
 };
 
-constexpr float midi_to_frequency(MidiNotes midi_no)
+constexpr float midi_to_frequency(MidiNote midi_no)
 {
     float const exponent = (static_cast<float>(midi_no) - 69.0f) / 12.0f;
     return std::powf(2, exponent) *
