@@ -61,7 +61,7 @@ float Envelope::processEnvelope()
 
     EnvelopeStage const stage     = m_stage.load(std::memory_order_relaxed);
     float const         stageTime = m_stageTime.load(std::memory_order_relaxed);
-    float currentAmplitude;
+    float currentAmplitude        = m_amplitude.load(std::memory_order_relaxed);
 
     switch (stage)
     {
@@ -139,10 +139,11 @@ float Envelope::processEnvelope()
 
             // How much amplitude should be reduced
             float const releaseAmount =
-                currentAmplitude * (stageTime / std::max(releaseTimeSec, 0.001f));
+                currentAmplitude *
+                (stageTime / std::max(releaseTimeSec, 0.001f));
 
             currentAmplitude = currentAmplitude - releaseAmount;
-    
+
             // If amplitude reaches 0 or release time is up, go to idle
             if (currentAmplitude <= 0.0f || stageTime >= releaseTimeSec)
             {

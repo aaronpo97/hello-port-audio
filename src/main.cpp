@@ -1,4 +1,4 @@
-#include "../include/MidiNote.hpp"
+#include "../include/MidiPitch.hpp"
 #include "../include/PortAudioStream.hpp"
 #include "../include/StreamState.hpp"
 #include "../include/constants.hpp"
@@ -10,8 +10,8 @@
 
 int main()
 {
-    StreamState stream_state(midi_to_frequency(MidiNote::A4),
-                             Envelope{100, 200, 0.7f, 500});
+    StreamState stream_state(midi_pitch_to_frequency(MidiPitch::A4),
+                             Envelope{500, 200, 0.7f, 500});
 
     /**
      * \note This callback runs on the real-time audio thread and therefore must
@@ -88,19 +88,19 @@ int main()
         // Play diminished seventh arpeggio ascending and descending with
         // envelope
         {
-            constexpr int64_t note_duration = 100; // ms per note
+            constexpr int64_t note_duration = 1000; // ms per note
             constexpr int64_t note_gap      = 80;  // ms between notes
 
-            using U = std::underlying_type_t<MidiNote>;
+            using U = std::underlying_type_t<MidiPitch>;
 
             Envelope &env = stream_state.getEnvelope();
 
-            constexpr auto upper = MidiNote::A2;
-            constexpr auto lower = MidiNote::A7;
+            constexpr auto upper = MidiPitch::A2;
+            constexpr auto lower = MidiPitch::A5;
 
-            auto play_note = [&](MidiNote const n) -> void
+            auto play_note = [&](MidiPitch const n) -> void
             {
-                stream_state.setFrequency(midi_to_frequency(n));
+                stream_state.setFrequency(midi_pitch_to_frequency(n));
                 env.noteOn(); // Trigger envelope
                 Pa_Sleep(note_duration);
                 env.noteOff();      // Release envelope
@@ -108,14 +108,14 @@ int main()
             };
             // Ascending
             for (auto note = upper; note < lower;
-                 note      = static_cast<MidiNote>(static_cast<U>(note) + 3))
+                 note      = static_cast<MidiPitch>(static_cast<U>(note) + 3))
             {
                 play_note(note);
             }
 
             // Descending
             for (auto note = lower; note >= upper;
-                 note      = static_cast<MidiNote>(static_cast<U>(note) - 3))
+                 note      = static_cast<MidiPitch>(static_cast<U>(note) - 3))
             {
                 play_note(note);
             }
