@@ -8,7 +8,7 @@
 
 StreamState::StreamState(float const initFreq, Envelope const &env)
     : m_freq(initFreq),
-      m_waveTable(
+      m_waveTable(std::invoke(
           []
           {
             std::array<float, c_tableSize> t{};
@@ -20,7 +20,7 @@ StreamState::StreamState(float const initFreq, Envelope const &env)
             }
 
             return t;
-          }()),
+          })),
       m_envelope(env)
 {
 }

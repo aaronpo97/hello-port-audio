@@ -1,27 +1,54 @@
-#include <portaudio.h>
-
 #include <array>
+#include <concepts>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
+#include <type_traits>
+
+#include <portaudio.h>
 
 #include "../include/MidiPitch.hpp"
 #include "../include/PortAudioStream.hpp"
 #include "../include/StreamState.hpp"
 #include "../include/constants.hpp"
 
+template <typename PlayNoteFn>
+  requires std::invocable<PlayNoteFn &, MidiPitch>
+void play_dim7_arp(MidiPitch const low,
+                   MidiPitch const high,
+                   PlayNoteFn    &&play_note)
+{
+
+  using U          = std::underlying_type_t<MidiPitch>;
+  U const lo       = static_cast<U>(low);
+  U const hi       = static_cast<U>(high);
+  U constexpr step = 3;
+
+  // Ascending (inclusive)
+  for (U n = lo; n <= hi; n += step)
+    play_note(static_cast<MidiPitch>(n));
+
+  for (U n = hi;;)
+  {
+    play_note(static_cast<MidiPitch>(n));
+    if (n <= lo)
+      break;
+    n -= step;
+  }
+}
+
 int main()
 {
+
   StreamState stream_state(midi_pitch_to_frequency(MidiPitch::A4),
-                           Envelope{500, 200, 0.7f, 500});
+                           Envelope{10, 10, 0.4f, 100});
 
   /**
-   * \note This callback runs on the real-time audio thread and therefore must
-   * not perform any blocking operations. It should complete within a
-   * deterministic amount of time.
-   *
-   * \warning Any state shared between the application thread and the callback
-   * thread must be communicated safely using std::atomic (or another
-   * lock-free mechanism) to prevent data races.
+   * \warning This callback runs on a seperate, real time thread and must not
+   * contain any blocking operations. Due to this, it should complete within a
+   * deterministic amount of time. Furthermore, any state shared between the
+   * application thread and the callback thread must be communicated safely
+   * using std::atomic to prevent data races.
    */
   PaStreamCallback *stream_cb = +[](void const         *inputBuffer,          //
                                     void               *outputBuffer,         //
@@ -86,38 +113,24 @@ int main()
 
     // Play diminished seventh arpeggio ascending and descending with
     // envelope
+
+    constexpr int64_t note_duration = 60; // ms per note
+    constexpr int64_t note_gap      = 30; // ms between notes
+
+    auto const play_note = [&stream_state](MidiPitch const n) -> void
     {
-      constexpr int64_t note_duration = 1000; // ms per note
-      constexpr int64_t note_gap      = 80;   // ms between notes
-
-      using U = std::underlying_type_t<MidiPitch>;
-
       Envelope &env = stream_state.getEnvelope();
+      stream_state.setFrequency(midi_pitch_to_frequency(n));
+      env.noteOn(); // Trigger envelope
+      Pa_Sleep(note_duration);
+      env.noteOff();      // Release envelope
+      Pa_Sleep(note_gap); // Wait for release to complete
+    };
 
-      constexpr auto upper = MidiPitch::A2;
-      constexpr auto lower = MidiPitch::A5;
-
-      auto play_note = [&](MidiPitch const n) -> void
-      {
-        stream_state.setFrequency(midi_pitch_to_frequency(n));
-        env.noteOn(); // Trigger envelope
-        Pa_Sleep(note_duration);
-        env.noteOff();      // Release envelope
-        Pa_Sleep(note_gap); // Wait for release to complete
-      };
-      // Ascending
-      for (auto note = upper; note < lower;
-           note      = static_cast<MidiPitch>(static_cast<U>(note) + 3))
-      {
-        play_note(note);
-      }
-
-      // Descending
-      for (auto note = lower; note >= upper;
-           note      = static_cast<MidiPitch>(static_cast<U>(note) - 3))
-      {
-        play_note(note);
-      }
+    constexpr size_t repetitions = 4;
+    for (size_t i = 0; i < repetitions; ++i)
+    {
+      play_dim7_arp(MidiPitch::A3, MidiPitch::A6, play_note);
     }
 
     audio_stream.stop();
